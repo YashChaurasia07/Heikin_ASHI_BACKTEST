@@ -40,7 +40,7 @@ for filename in data_files:
         full_data = tv.get_hist(
             symbol=symbol,
             exchange='NSE',
-            interval=Interval.in_daily,
+            interval=Interval.in_weekly,
             n_bars=5000
         )
         

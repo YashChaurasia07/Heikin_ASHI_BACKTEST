@@ -15,6 +15,23 @@ interface CurrentPositionsProps {
 }
 
 export default function CurrentPositions({ backtestResult }: CurrentPositionsProps) {
+  // Check if stocks data is available
+  if (!backtestResult.stocks || Object.keys(backtestResult.stocks).length === 0) {
+    return (
+      <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
+        <h2 className="text-2xl font-bold flex items-center gap-2 mb-4">
+          <Activity className="text-blue-400" size={28} />
+          Current Open Positions
+        </h2>
+        <div className="text-center py-12">
+          <Activity className="mx-auto text-gray-600 mb-4" size={48} />
+          <p className="text-gray-400 text-lg mb-2">No stock data available</p>
+          <p className="text-gray-500 text-sm">Run a backtest to see open positions</p>
+        </div>
+      </div>
+    );
+  }
+
   // Find all positions that are still open (last trade with exit_date at end of data)
   const getCurrentPositions = (): CurrentPosition[] => {
     const positions: CurrentPosition[] = [];

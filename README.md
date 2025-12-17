@@ -1,1 +1,0 @@
-# Heikin_ASHI_BACKTEST

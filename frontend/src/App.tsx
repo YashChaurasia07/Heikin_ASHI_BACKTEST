@@ -8,7 +8,10 @@ import Statistics from './components/Statistics';
 import PortfolioTimeline from './components/PortfolioTimeline';
 import CurrentPositions from './components/CurrentPositions';
 import PortfolioSummary from './components/PortfolioSummary';
-import { BarChart3, TrendingUp, DollarSign, Activity, Search, Play, Loader2, PieChart, Sparkles, Calendar, ListChecks, Briefcase } from 'lucide-react';
+import SymbolManager from './components/SymbolManager';
+import DataSyncStatus from './components/DataSyncStatus';
+import Instructions from './components/Instructions';
+import { BarChart3, TrendingUp, DollarSign, Activity, Search, Play, Loader2, PieChart, Sparkles, Calendar, ListChecks, Briefcase, Settings, BookOpen } from 'lucide-react';
 import { formatINR } from './utils/formatters';
 
 function App() {
@@ -22,10 +25,11 @@ function App() {
   const [initialCapital, setInitialCapital] = useState(50000);
   const [searchQuery, setSearchQuery] = useState('');
   const [showStatistics, setShowStatistics] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'stocks' | 'timeline' | 'positions'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'stocks' | 'timeline' | 'positions' | 'settings' | 'instructions'>('overview');
   
-  // Smart backtest mode
-  const [useSmartMode, setUseSmartMode] = useState(false);
+  // Strategy selection: 'all' | 'smart' | 'tscore'
+  const [strategy, setStrategy] = useState<'all' | 'smart' | 'tscore'>('all');
+  const [interval, setInterval] = useState<'daily' | 'weekly'>('daily');
   const [totalInvestment, setTotalInvestment] = useState(500000);
   const [numStocksToSelect, setNumStocksToSelect] = useState(10);
 
@@ -35,21 +39,31 @@ function App() {
     try {
       let result;
       
-      if (useSmartMode) {
+      if (strategy === 'smart') {
         // Smart backtest - backend selects best stocks with priority filtering
         result = await api.runSmartBacktest(
           totalInvestment,
           numStocksToSelect,
           startDate,
           endDate,
-          true // use cached
+          interval
+        );
+      } else if (strategy === 'tscore') {
+        // Heikin Ashi + T-Score strategy
+        result = await api.runHATScoreBacktest(
+          totalInvestment,
+          numStocksToSelect,
+          startDate,
+          endDate,
+          interval
         );
       } else {
         // Regular backtest - all stocks
         result = await api.runBacktest(
           startDate, 
           endDate, 
-          initialCapital
+          initialCapital,
+          interval
         );
       }
       
@@ -76,7 +90,7 @@ function App() {
     }
   };
 
-  const filteredStocks = backtestResult
+  const filteredStocks = backtestResult?.stocks
     ? Object.entries(backtestResult.stocks).filter(([symbol]) =>
         symbol.toLowerCase().includes(searchQuery.toLowerCase())
       )
@@ -99,14 +113,41 @@ function App() {
             </div>
             
             <div className="flex items-center gap-4 flex-wrap">
-              {/* Smart Mode Toggle */}
+              {/* Interval Selection */}
               <div className="flex flex-col items-start">
-                <label className="text-xs text-gray-400 mb-1">Mode</label>
+                <label className="text-xs text-gray-400 mb-1">Timeframe</label>
                 <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5">
                   <button
-                    onClick={() => setUseSmartMode(false)}
+                    onClick={() => setInterval('daily')}
                     className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                      !useSmartMode 
+                      interval === 'daily' 
+                        ? 'bg-blue-600 text-white' 
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Daily
+                  </button>
+                  <button
+                    onClick={() => setInterval('weekly')}
+                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                      interval === 'weekly' 
+                        ? 'bg-blue-600 text-white' 
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Weekly
+                  </button>
+                </div>
+              </div>
+              
+              {/* Strategy Selection */}
+              <div className="flex flex-col items-start">
+                <label className="text-xs text-gray-400 mb-1">Strategy</label>
+                <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5">
+                  <button
+                    onClick={() => setStrategy('all')}
+                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                      strategy === 'all' 
                         ? 'bg-primary-600 text-white' 
                         : 'text-gray-400 hover:text-white'
                     }`}
@@ -114,21 +155,32 @@ function App() {
                     All Stocks
                   </button>
                   <button
-                    onClick={() => setUseSmartMode(true)}
+                    onClick={() => setStrategy('smart')}
                     className={`px-3 py-1 rounded text-sm font-medium transition-colors flex items-center gap-1 ${
-                      useSmartMode 
+                      strategy === 'smart' 
                         ? 'bg-green-600 text-white' 
                         : 'text-gray-400 hover:text-white'
                     }`}
                   >
                     <Sparkles size={14} />
-                    Smart Select
+                    Smart
+                  </button>
+                  <button
+                    onClick={() => setStrategy('tscore')}
+                    className={`px-3 py-1 rounded text-sm font-medium transition-colors flex items-center gap-1 ${
+                      strategy === 'tscore' 
+                        ? 'bg-purple-600 text-white' 
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <TrendingUp size={14} />
+                    HA+TScore
                   </button>
                 </div>
               </div>
 
-              {useSmartMode ? (
-                /* Smart Mode Inputs */
+              {(strategy === 'smart' || strategy === 'tscore') ? (
+                /* Smart Mode & T-Score Inputs */
                 <>
                   <div className="flex flex-col items-start">
                     <label className="text-xs text-gray-400 mb-1">Total Investment</label>
@@ -136,19 +188,23 @@ function App() {
                       type="number"
                       value={totalInvestment}
                       onChange={(e) => setTotalInvestment(Number(e.target.value))}
-                      className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm w-36 focus:outline-none focus:border-green-500"
+                      className={`bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm w-36 focus:outline-none ${
+                        strategy === 'tscore' ? 'focus:border-purple-500' : 'focus:border-green-500'
+                      }`}
                       placeholder="₹500000"
                     />
                   </div>
                   <div className="flex flex-col items-start">
-                    <label className="text-xs text-gray-400 mb-1">Number of Stocks</label>
+                    <label className="text-xs text-gray-400 mb-1">Max Positions</label>
                     <input
                       type="number"
                       value={numStocksToSelect}
                       onChange={(e) => setNumStocksToSelect(Number(e.target.value))}
                       min={1}
                       max={50}
-                      className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm w-28 focus:outline-none focus:border-green-500"
+                      className={`bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm w-28 focus:outline-none ${
+                        strategy === 'tscore' ? 'focus:border-purple-500' : 'focus:border-green-500'
+                      }`}
                     />
                   </div>
                 </>
@@ -190,7 +246,11 @@ function App() {
                 onClick={runBacktest}
                 disabled={loading}
                 className={`${
-                  useSmartMode ? 'bg-green-600 hover:bg-green-700' : 'bg-primary-600 hover:bg-primary-700'
+                  strategy === 'smart' 
+                    ? 'bg-green-600 hover:bg-green-700' 
+                    : strategy === 'tscore'
+                    ? 'bg-purple-600 hover:bg-purple-700'
+                    : 'bg-primary-600 hover:bg-primary-700'
                 } disabled:bg-gray-700 px-6 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors mt-5`}
               >
                 {loading ? (
@@ -201,7 +261,7 @@ function App() {
                 ) : (
                   <>
                     <Play size={20} />
-                    {useSmartMode ? 'Smart Backtest' : 'Run Backtest'}
+                    {strategy === 'smart' ? 'Smart Backtest' : strategy === 'tscore' ? 'HA+TScore Backtest' : 'Run Backtest'}
                   </>
                 )}
               </button>
@@ -211,6 +271,47 @@ function App() {
       </header>
 
       <div className="container mx-auto px-6 py-8">
+        {/* T-Score Strategy Info Banner */}
+        {backtestResult && backtestResult.params?.strategy === 'heikin_ashi_tscore' && backtestResult.tscore_stats && (
+          <div className="mb-6 bg-gradient-to-r from-purple-900/50 to-indigo-900/30 rounded-xl p-6 border border-purple-700/50">
+            <div className="flex items-center gap-3 mb-4">
+              <TrendingUp className="text-purple-400" size={24} />
+              <h3 className="text-xl font-bold text-purple-400">Heikin Ashi + T-Score Strategy</h3>
+            </div>
+            <div className="mb-4 text-sm text-gray-300">
+              <p>This strategy combines <span className="font-bold text-purple-300">Heikin Ashi pattern recognition</span> for entry signals with <span className="font-bold text-purple-300">T-Score momentum filtering</span> for intelligent stock prioritization.</p>
+              <p className="mt-2">When multiple stocks signal on the same day, stocks with higher T-Score get priority (stronger momentum, better technical position).</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              <div>
+                <p className="text-sm text-gray-400">Total Investment</p>
+                <p className="text-lg font-bold text-white">₹{(backtestResult.total_initial_capital ?? 0).toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-400">Max Positions</p>
+                <p className="text-lg font-bold text-white">{backtestResult.params?.max_concurrent_positions ?? numStocksToSelect}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-400">Avg T-Score at Entry</p>
+                <p className="text-lg font-bold text-purple-400">{backtestResult.tscore_stats?.avg_tscore_at_entry ?? 0}%</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-400">Stocks Traded</p>
+                <p className="text-lg font-bold text-white">{backtestResult.num_stocks_processed ?? 0}</p>
+              </div>
+            </div>
+            <div className="bg-purple-900/30 rounded-lg p-4 border border-purple-800/50">
+              <p className="text-sm font-bold text-purple-300 mb-2">T-Score Components:</p>
+              <ul className="text-sm text-gray-300 space-y-1">
+                <li>• <span className="text-purple-400">SMA21, SMA50, SMA200</span>: Price vs moving averages (3 points)</li>
+                <li>• <span className="text-purple-400">7-Day Momentum</span>: Close vs 7-day max (2 points)</li>
+                <li>• <span className="text-purple-400">52-Week High Range</span>: Proximity to 52-week high (0-3 points)</li>
+                <li className="mt-2 font-bold">• Higher T-Score = Stronger stock = Higher entry priority</li>
+              </ul>
+            </div>
+          </div>
+        )}
+
         {/* Smart Selection Info Banner */}
         {backtestResult && backtestResult.selection_info && (
           <div className="mb-6 bg-gradient-to-r from-green-900/50 to-emerald-900/30 rounded-xl p-6 border border-green-700/50">
@@ -221,29 +322,29 @@ function App() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
               <div>
                 <p className="text-sm text-gray-400">Total Investment</p>
-                <p className="text-lg font-bold text-white">₹{backtestResult.selection_info.total_investment.toLocaleString()}</p>
+                <p className="text-lg font-bold text-white">₹{(backtestResult.selection_info?.total_investment ?? 0).toLocaleString()}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-400">Stocks Selected</p>
-                <p className="text-lg font-bold text-white">{backtestResult.selection_info.num_stocks_selected} of {backtestResult.selection_info.total_stocks_analyzed} analyzed</p>
+                <p className="text-lg font-bold text-white">{backtestResult.selection_info?.num_stocks_selected ?? 0} of {backtestResult.selection_info?.total_stocks_analyzed ?? 0} analyzed</p>
               </div>
               <div>
                 <p className="text-sm text-gray-400">Capital per Stock</p>
-                <p className="text-lg font-bold text-white">₹{Math.round(backtestResult.selection_info.capital_per_stock).toLocaleString()}</p>
+                <p className="text-lg font-bold text-white">₹{Math.round(backtestResult.selection_info?.capital_per_stock ?? 0).toLocaleString()}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-400">Ranking Period</p>
-                <p className="text-lg font-bold text-white">{backtestResult.selection_info.ranking_period_months} months</p>
+                <p className="text-lg font-bold text-white">{backtestResult.selection_info?.ranking_period_months ?? 0} months</p>
               </div>
             </div>
             <div>
               <p className="text-sm text-gray-400 mb-2">Selected Stocks (ranked by composite score):</p>
               <div className="flex flex-wrap gap-2">
-                {backtestResult.selection_info.selected_stocks.map((stock) => (
+                {backtestResult.selection_info.selected_stocks?.map((stock) => (
                   <div key={stock.symbol} className="bg-gray-900/50 rounded-lg px-3 py-2 text-sm border border-gray-700 hover:border-green-600 transition-colors">
                     <span className="font-bold text-green-400">{stock.symbol}</span>
-                    <span className="text-gray-400 ml-2">WR: {stock.historical_win_rate.toFixed(1)}%</span>
-                    <span className="text-gray-500 ml-2">Score: {stock.ranking_score}</span>
+                    <span className="text-gray-400 ml-2">WR: {(stock.historical_win_rate ?? 0).toFixed(1)}%</span>
+                    <span className="text-gray-500 ml-2">Score: {stock.ranking_score ?? 0}</span>
                   </div>
                 ))}
               </div>
@@ -262,8 +363,8 @@ function App() {
                   <span className="text-lg font-bold text-primary-400">Heikin Ashi</span>
                 </div>
                 <div className="flex items-center gap-4 text-sm text-gray-400">
-                  <span>Period: {backtestResult.params.start_date} to {backtestResult.params.end_date || 'Latest'}</span>
-                  {!backtestResult.selection_info && (
+                  <span>Period: {backtestResult.params?.start_date ?? ''} to {backtestResult.params?.end_date || 'Latest'}</span>
+                  {!backtestResult.selection_info && backtestResult.params?.initial_capital && (
                     <span>Capital: ₹{backtestResult.params.initial_capital.toLocaleString()}</span>
                   )}
                 </div>
@@ -278,11 +379,11 @@ function App() {
               </div>
               <div
                 className={`text-3xl font-bold ${
-                  backtestResult.total_pnl >= 0 ? 'text-green-400' : 'text-red-400'
+                  (backtestResult.total_pnl ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'
                 }`}
               >
-                {backtestResult.total_pnl >= 0 ? '+' : ''}
-                {formatINR(backtestResult.total_pnl, 2)}
+                {(backtestResult.total_pnl ?? 0) >= 0 ? '+' : ''}
+                {formatINR(backtestResult.total_pnl ?? 0, 2)}
               </div>
             </div>
 
@@ -293,11 +394,11 @@ function App() {
               </div>
               <div
                 className={`text-3xl font-bold ${
-                  backtestResult.total_return_pct >= 0 ? 'text-green-400' : 'text-red-400'
+                  (backtestResult.total_return_pct ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'
                 }`}
               >
-                {backtestResult.total_return_pct >= 0 ? '+' : ''}
-                {backtestResult.total_return_pct.toFixed(2)}%
+                {(backtestResult.total_return_pct ?? 0) >= 0 ? '+' : ''}
+                {(backtestResult.total_return_pct ?? 0).toFixed(2)}%
               </div>
             </div>
 
@@ -307,7 +408,7 @@ function App() {
                 <span className="text-sm text-gray-300">Final Capital</span>
               </div>
               <div className="text-3xl font-bold text-white">
-                {formatINR(backtestResult.total_final_capital, 2)}
+                {formatINR(backtestResult.total_final_capital ?? 0, 2)}
               </div>
             </div>
 
@@ -317,7 +418,7 @@ function App() {
                 <span className="text-sm text-gray-300">Stocks Processed</span>
               </div>
               <div className="text-3xl font-bold text-white">
-                {backtestResult.num_stocks_processed}
+                {backtestResult.num_stocks_processed ?? 0}
               </div>
             </div>
           </div>
@@ -325,13 +426,13 @@ function App() {
         )}
 
         {/* Overall Portfolio Capital Growth Chart */}
-        {backtestResult && (() => {
+        {backtestResult && backtestResult.stocks && (() => {
           const allTrades = Object.values(backtestResult.stocks).flatMap(stock => stock.trades);
           return (
             <div className="mb-8">
               <CapitalGrowthChart
-                initialCapital={backtestResult.total_initial_capital}
-                finalCapital={backtestResult.total_final_capital}
+                initialCapital={backtestResult.total_initial_capital ?? 0}
+                finalCapital={backtestResult.total_final_capital ?? 0}
                 trades={allTrades}
                 title="Overall Portfolio Capital Growth"
               />
@@ -339,55 +440,111 @@ function App() {
           );
         })()}
 
+        {/* Info Banner to Guide Users */}
+        {backtestResult && (
+          <div className="mb-4 bg-gradient-to-r from-blue-900/40 to-purple-900/40 rounded-lg p-4 border border-blue-700/50">
+            <div className="flex items-center gap-3">
+              <BarChart3 className="text-blue-400 flex-shrink-0" size={24} />
+              <p className="text-sm text-gray-200">
+                <span className="font-semibold text-blue-300">Explore detailed analytics</span> using the tabs below: 
+                Portfolio Overview, Day-wise Timeline, Open Positions, and Individual Stock Performance
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Tabs Navigation */}
         {backtestResult && (
           <div className="mb-8">
-            <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
-              <div className="flex border-b border-gray-800 overflow-x-auto">
-                <button
-                  onClick={() => setActiveTab('overview')}
-                  className={`flex items-center gap-2 px-6 py-4 font-semibold transition-colors whitespace-nowrap ${
-                    activeTab === 'overview'
-                      ? 'bg-blue-600 text-white border-b-2 border-blue-400'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                  }`}
-                >
-                  <Briefcase size={20} />
-                  Portfolio Overview
-                </button>
-                <button
-                  onClick={() => setActiveTab('timeline')}
-                  className={`flex items-center gap-2 px-6 py-4 font-semibold transition-colors whitespace-nowrap ${
-                    activeTab === 'timeline'
-                      ? 'bg-blue-600 text-white border-b-2 border-blue-400'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                  }`}
-                >
-                  <Calendar size={20} />
-                  Day-wise Timeline
-                </button>
-                <button
-                  onClick={() => setActiveTab('positions')}
-                  className={`flex items-center gap-2 px-6 py-4 font-semibold transition-colors whitespace-nowrap ${
-                    activeTab === 'positions'
-                      ? 'bg-blue-600 text-white border-b-2 border-blue-400'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                  }`}
-                >
-                  <ListChecks size={20} />
-                  Open Positions
-                </button>
-                <button
-                  onClick={() => setActiveTab('stocks')}
-                  className={`flex items-center gap-2 px-6 py-4 font-semibold transition-colors whitespace-nowrap ${
-                    activeTab === 'stocks'
-                      ? 'bg-blue-600 text-white border-b-2 border-blue-400'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                  }`}
-                >
-                  <BarChart3 size={20} />
-                  Individual Stocks
-                </button>
+            <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden shadow-lg">
+              {/* Tab Header with better visibility */}
+              <div className="bg-gradient-to-r from-gray-800 to-gray-900 border-b-2 border-blue-600">
+                <div className="flex overflow-x-auto">
+                  <button
+                    onClick={() => setActiveTab('overview')}
+                    className={`flex items-center gap-2 px-6 py-4 font-semibold transition-all whitespace-nowrap relative ${
+                      activeTab === 'overview'
+                        ? 'bg-blue-600 text-white'
+                        : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                    }`}
+                  >
+                    <Briefcase size={20} />
+                    Portfolio Overview
+                    {activeTab === 'overview' && (
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-400"></div>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('timeline')}
+                    className={`flex items-center gap-2 px-6 py-4 font-semibold transition-all whitespace-nowrap relative ${
+                      activeTab === 'timeline'
+                        ? 'bg-blue-600 text-white'
+                        : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                    }`}
+                  >
+                    <Calendar size={20} />
+                    Day-wise Timeline
+                    {activeTab === 'timeline' && (
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-400"></div>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('positions')}
+                    className={`flex items-center gap-2 px-6 py-4 font-semibold transition-all whitespace-nowrap relative ${
+                      activeTab === 'positions'
+                        ? 'bg-blue-600 text-white'
+                        : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                    }`}
+                  >
+                    <ListChecks size={20} />
+                    Open Positions
+                    {activeTab === 'positions' && (
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-400"></div>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('stocks')}
+                    className={`flex items-center gap-2 px-6 py-4 font-semibold transition-all whitespace-nowrap relative ${
+                      activeTab === 'stocks'
+                        ? 'bg-blue-600 text-white'
+                        : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                    }`}
+                  >
+                    <BarChart3 size={20} />
+                    Individual Stocks
+                    {activeTab === 'stocks' && (
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-400"></div>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('settings')}
+                    className={`flex items-center gap-2 px-6 py-4 font-semibold transition-all whitespace-nowrap relative ${
+                      activeTab === 'settings'
+                        ? 'bg-blue-600 text-white'
+                        : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                    }`}
+                  >
+                    <Settings size={20} />
+                    Settings
+                    {activeTab === 'settings' && (
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-400"></div>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('instructions')}
+                    className={`flex items-center gap-2 px-6 py-4 font-semibold transition-all whitespace-nowrap relative ${
+                      activeTab === 'instructions'
+                        ? 'bg-blue-600 text-white'
+                        : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                    }`}
+                  >
+                    <BookOpen size={20} />
+                    Guide
+                    {activeTab === 'instructions' && (
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-400"></div>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {/* Tab Content */}
@@ -396,12 +553,12 @@ function App() {
                   <PortfolioSummary backtestResult={backtestResult} />
                 )}
 
-                {activeTab === 'timeline' && (() => {
+                {activeTab === 'timeline' && backtestResult.stocks && (() => {
                   const allTrades = Object.values(backtestResult.stocks).flatMap(stock => stock.trades);
                   return (
                     <PortfolioTimeline 
                       trades={allTrades}
-                      initialCapital={backtestResult.total_initial_capital}
+                      initialCapital={backtestResult.total_initial_capital ?? 0}
                     />
                   );
                 })()}
@@ -426,20 +583,55 @@ function App() {
                       </div>
                     </div>
 
-                    {/* Stock Grid */}
-                    <div className="max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {sortedStocks.map(([symbol, result]) => (
-                          <StockCard
-                            key={symbol}
-                            symbol={symbol}
-                            result={result}
-                            onClick={() => handleStockSelect(symbol)}
-                          />
-                        ))}
+                    {/* Stock Count Info */}
+                    {sortedStocks.length > 0 && (
+                      <div className="mb-4 flex items-center justify-between">
+                        <p className="text-sm text-gray-400">
+                          Showing <span className="font-semibold text-white">{sortedStocks.length}</span> stock{sortedStocks.length !== 1 ? 's' : ''}
+                          {searchQuery && <span> matching "{searchQuery}"</span>}
+                        </p>
                       </div>
+                    )}
+
+                    {/* Stock Grid */}
+                    {sortedStocks.length > 0 ? (
+                      <div className="max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                          {sortedStocks.map(([symbol, result]) => (
+                            <StockCard
+                              key={symbol}
+                              symbol={symbol}
+                              result={result}
+                              onClick={() => handleStockSelect(symbol)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-12">
+                        <BarChart3 className="mx-auto text-gray-600 mb-4" size={48} />
+                        <p className="text-gray-400 text-lg mb-2">
+                          {searchQuery ? 'No stocks found matching your search' : 'No stocks available'}
+                        </p>
+                        {searchQuery && (
+                          <p className="text-gray-500 text-sm">Try adjusting your search query</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === 'settings' && (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <SymbolManager />
+                      <DataSyncStatus />
                     </div>
                   </div>
+                )}
+
+                {activeTab === 'instructions' && (
+                  <Instructions />
                 )}
               </div>
             </div>
@@ -528,6 +720,25 @@ function App() {
             <p className="text-gray-400 text-lg mb-8">
               Choose your mode and configure parameters to analyze performance
             </p>
+            
+            {/* Settings Management Section */}
+            <div className="mb-12">
+              <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden max-w-6xl mx-auto">
+                <div className="bg-gray-800 p-4 border-b border-gray-700">
+                  <h3 className="text-xl font-bold flex items-center gap-2 justify-center">
+                    <Settings size={24} />
+                    Data & Symbol Management
+                  </h3>
+                </div>
+                <div className="p-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <SymbolManager />
+                    <DataSyncStatus />
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto mb-8">
               {/* All Stocks Mode */}
               <div className="bg-gray-900/50 rounded-xl p-6 border border-gray-800">

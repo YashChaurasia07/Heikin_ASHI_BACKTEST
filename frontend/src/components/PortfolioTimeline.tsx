@@ -22,6 +22,23 @@ export default function PortfolioTimeline({ trades }: PortfolioTimelineProps) {
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'all' | 'entries' | 'exits'>('all');
 
+  // Check if trades are available
+  if (!trades || trades.length === 0) {
+    return (
+      <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
+        <h2 className="text-2xl font-bold flex items-center gap-2 mb-4">
+          <Calendar className="text-blue-400" size={28} />
+          Day-wise Portfolio Timeline
+        </h2>
+        <div className="text-center py-12">
+          <Calendar className="mx-auto text-gray-600 mb-4" size={48} />
+          <p className="text-gray-400 text-lg mb-2">No trades available</p>
+          <p className="text-gray-500 text-sm">Run a backtest to see day-wise activity</p>
+        </div>
+      </div>
+    );
+  }
+
   // Group trades by date
   const groupTradesByDate = (): DayPortfolio[] => {
     const dateMap = new Map<string, { entries: Trade[], exits: Trade[] }>();

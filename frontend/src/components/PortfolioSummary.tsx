@@ -7,6 +7,23 @@ interface PortfolioSummaryProps {
 }
 
 export default function PortfolioSummary({ backtestResult }: PortfolioSummaryProps) {
+  // Check if stocks data is available
+  if (!backtestResult.stocks || Object.keys(backtestResult.stocks).length === 0) {
+    return (
+      <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
+        <h2 className="text-2xl font-bold flex items-center gap-2 mb-4">
+          <PieChart className="text-purple-400" size={28} />
+          Portfolio Summary
+        </h2>
+        <div className="text-center py-12">
+          <PieChart className="mx-auto text-gray-600 mb-4" size={48} />
+          <p className="text-gray-400 text-lg mb-2">No stock data available</p>
+          <p className="text-gray-500 text-sm">Run a backtest to see portfolio analysis</p>
+        </div>
+      </div>
+    );
+  }
+
   // Calculate portfolio metrics
   const totalTrades = Object.values(backtestResult.stocks).reduce(
     (sum, stock) => sum + stock.trades.length, 
@@ -35,9 +52,9 @@ export default function PortfolioSummary({ backtestResult }: PortfolioSummaryPro
   const worstStock = stockPerformances.sort((a, b) => a.pnl - b.pnl)[0];
 
   // Capital allocation
-  const totalCapitalDeployed = backtestResult.total_initial_capital;
-  const currentCapital = backtestResult.total_final_capital;
-  const capitalGrowth = ((currentCapital - totalCapitalDeployed) / totalCapitalDeployed) * 100;
+  const totalCapitalDeployed = backtestResult.total_initial_capital ?? 0;
+  const currentCapital = backtestResult.total_final_capital ?? 0;
+  const capitalGrowth = totalCapitalDeployed > 0 ? ((currentCapital - totalCapitalDeployed) / totalCapitalDeployed) * 100 : 0;
 
   return (
     <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
@@ -130,6 +147,17 @@ export default function PortfolioSummary({ backtestResult }: PortfolioSummaryPro
                 {backtestResult.total_return_pct.toFixed(2)}%
               </div>
             </div>
+            {backtestResult.statistics?.cagr_pct !== undefined && (
+              <div>
+                <div className="text-xs text-gray-400">CAGR</div>
+                <div className={`text-xl font-bold ${
+                  backtestResult.statistics.cagr_pct >= 0 ? 'text-green-400' : 'text-red-400'
+                }`}>
+                  {backtestResult.statistics.cagr_pct >= 0 ? '+' : ''}
+                  {backtestResult.statistics.cagr_pct.toFixed(2)}%
+                </div>
+              </div>
+            )}
             <div>
               <div className="text-xs text-gray-400">Stocks Processed</div>
               <div className="text-lg font-bold text-white">

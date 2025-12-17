@@ -1,6 +1,14 @@
 import axios from 'axios';
 
+// Use /api for development (proxied by Vite to localhost:8000)
+// In production, set VITE_API_URL environment variable
 const API_BASE_URL = '/api';
+
+// Create axios instance with explicit configuration
+const axiosInstance = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: false,
+});
 
 export interface Trade {
   entry_date: string;
@@ -98,6 +106,7 @@ export interface Statistics {
   max_return_pct: number;
   min_return_pct: number;
   sharpe_ratio_approx: number;
+  cagr_pct: number;
   exit_type_breakdown?: Record<string, {
     count: number;
     pct: number;
@@ -142,9 +151,15 @@ export interface BacktestResult {
     end_date: string | null;
     initial_capital: number;
     strategy: string;
+    max_concurrent_positions?: number;
   };
   statistics?: Statistics;
   selection_info?: SelectionInfo;
+  tscore_stats?: {
+    avg_tscore_at_entry: number;
+    trades_with_tscore: number;
+    total_trades: number;
+  };
 }
 
 export interface OHLCData {
@@ -165,26 +180,79 @@ export interface HAData {
 
 const api = {
   async getSymbols(): Promise<string[]> {
-    const response = await axios.get<{ symbols: string[] }>(`${API_BASE_URL}/symbols`);
+    const response = await axiosInstance.get<{ symbols: string[] }>('/data/symbols');
     return response.data.symbols;
   },
 
-  async runBacktest(startDate: string, endDate: string, initialCapital: number): Promise<BacktestResult> {
-    let url = `${API_BASE_URL}/backtest?start_date=${startDate}&initial_capital=${initialCapital}`;
+  async getAllSymbols(): Promise<any[]> {
+    const response = await axiosInstance.get('/symbols/');
+    return response.data;
+  },
+
+  async addSymbol(symbol: string, exchange: string = "NSE"): Promise<any> {
+    const response = await axiosInstance.post(`/symbols/add?symbol=${symbol}&exchange=${exchange}`);
+    return response.data;
+  },
+
+  async bulkAddSymbols(symbols: string[], exchange: string = "NSE"): Promise<any> {
+    const response = await axiosInstance.post(`/symbols/bulk-add?exchange=${exchange}`, symbols);
+    return response.data;
+  },
+
+  async deleteSymbol(symbol: string): Promise<any> {
+    const response = await axiosInstance.delete(`/symbols/${symbol}`);
+    return response.data;
+  },
+
+  async uploadSymbolsExcel(file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await axiosInstance.post('/symbols/upload-excel', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  },
+
+  async syncData(symbols?: string[], interval: string = "daily", forceUpdate: boolean = false): Promise<any> {
+    const response = await axiosInstance.post('/data/sync', {
+      symbols,
+      interval,
+      force_update: forceUpdate
+    });
+    return response.data;
+  },
+
+  async getDataStatus(symbol: string, interval: string = "daily"): Promise<any> {
+    const response = await axiosInstance.get(`/data/status/${symbol}?interval=${interval}`);
+    return response.data;
+  },
+
+  async checkAllDataStatus(interval: string = "daily"): Promise<any> {
+    const response = await axiosInstance.get(`/data/check-all?interval=${interval}`);
+    return response.data;
+  },
+
+  async getBacktestStatus(): Promise<any> {
+    const response = await axiosInstance.get('/backtest/status');
+    return response.data;
+  },
+
+  async runBacktest(startDate: string, endDate: string, initialCapital: number, interval: string = 'daily'): Promise<BacktestResult> {
+    let url = `/backtest?start_date=${startDate}&initial_capital=${initialCapital}&interval=${interval}`;
     if (endDate) {
       url += `&end_date=${endDate}`;
     }
-    const response = await axios.get<BacktestResult>(url);
+    const response = await axiosInstance.get<BacktestResult>(url);
     return response.data;
   },
 
   async getStockData(symbol: string): Promise<OHLCData[]> {
-    const response = await axios.get<OHLCData[]>(`${API_BASE_URL}/data/${symbol}`);
+    const response = await axiosInstance.get<OHLCData[]>(`/data/${symbol}`);
     return response.data;
   },
 
   async getHAData(symbol: string): Promise<HAData[]> {
-    const response = await axios.get<HAData[]>(`${API_BASE_URL}/ha_data/${symbol}`);
+    const response = await axiosInstance.get<HAData[]>(`/data/${symbol}/ha`);
     return response.data;
   },
 
@@ -193,13 +261,38 @@ const api = {
     numStocks: number,
     startDate: string,
     endDate: string,
-    useCached: boolean = true
+    interval: string = 'daily'
   ): Promise<BacktestResult> {
-    let url = `${API_BASE_URL}/smart_backtest?total_investment=${totalInvestment}&num_stocks=${numStocks}&start_date=${startDate}&use_cached=${useCached}`;
-    if (endDate) {
-      url += `&end_date=${endDate}`;
-    }
-    const response = await axios.get<BacktestResult>(url);
+    const response = await axiosInstance.post<BacktestResult>('/advanced/smart-portfolio', {
+      total_investment: totalInvestment,
+      num_stocks: numStocks,
+      start_date: startDate,
+      end_date: endDate || null,
+      interval: interval,
+      ranking_period_months: 6,
+      enable_compounding: true,
+      rebalancing_frequency: 'daily'
+    });
+    return response.data;
+  },
+
+  async runHATScoreBacktest(
+    totalInvestment: number,
+    numStocks: number,
+    startDate: string,
+    endDate: string,
+    interval: string = 'daily'
+  ): Promise<BacktestResult> {
+    const response = await axiosInstance.post<BacktestResult>('/advanced/ha-tscore', {
+      total_investment: totalInvestment,
+      num_stocks: numStocks,
+      start_date: startDate,
+      end_date: endDate || null,
+      interval: interval,
+      ranking_period_months: 6,
+      enable_compounding: true,
+      rebalancing_frequency: 'daily'
+    });
     return response.data;
   },
 };

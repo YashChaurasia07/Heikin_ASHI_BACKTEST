@@ -111,7 +111,7 @@ function Statistics({ statistics }: StatisticsProps) {
           <Target className="text-green-400" size={24} />
           Win/Loss & Profitability Analysis
         </h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <StatCard
             icon={BarChart3}
             title="Total Trades"
@@ -137,6 +137,15 @@ function Statistics({ statistics }: StatisticsProps) {
             value={statistics.profit_factor === Infinity ? '∞' : statistics.profit_factor.toFixed(2)}
             color="yellow"
           />
+          {statistics.cagr_pct !== undefined && (
+            <StatCard
+              icon={Zap}
+              title="CAGR"
+              value={`${statistics.cagr_pct >= 0 ? '+' : ''}${statistics.cagr_pct.toFixed(2)}%`}
+              subtitle="Annualized Return"
+              color={statistics.cagr_pct >= 0 ? 'green' : 'red'}
+            />
+          )}
           <StatCard
             icon={DollarSign}
             title="Total Profit"
@@ -307,26 +316,26 @@ function Statistics({ statistics }: StatisticsProps) {
           <StatCard
             icon={TrendingUp}
             title="Max Return"
-            value={`${statistics.max_return_pct.toFixed(2)}%`}
+            value={`${statistics.max_return_pct?.toFixed(2) ?? 'N/A'}%`}
             color="green"
           />
           <StatCard
             icon={TrendingDown}
             title="Min Return"
-            value={`${statistics.min_return_pct.toFixed(2)}%`}
+            value={`${statistics.min_return_pct?.toFixed(2) ?? 'N/A'}%`}
             color="red"
           />
           <StatCard
             icon={Zap}
             title="Sharpe Ratio"
-            value={statistics.sharpe_ratio_approx.toFixed(2)}
+            value={statistics.sharpe_ratio_approx?.toFixed(2) ?? 'N/A'}
             color="purple"
           />
           <StatCard
             icon={AlertTriangle}
             title="Max Drawdown"
             value={formatINR(statistics.max_drawdown)}
-            subtitle={`${statistics.max_drawdown_pct.toFixed(2)}%`}
+            subtitle={`${statistics.max_drawdown_pct?.toFixed(2) ?? 'N/A'}%`}
             color="red"
           />
         </div>
@@ -389,14 +398,14 @@ function Statistics({ statistics }: StatisticsProps) {
           <StatCard
             icon={DollarSign}
             title="Return on Capital"
-            value={`${statistics.return_on_capital_pct.toFixed(2)}%`}
-            color={statistics.return_on_capital_pct >= 0 ? 'green' : 'red'}
+            value={`${statistics.return_on_capital_pct?.toFixed(2) ?? 'N/A'}%`}
+            color={statistics.return_on_capital_pct && statistics.return_on_capital_pct >= 0 ? 'green' : 'red'}
           />
           <StatCard
             icon={Activity}
             title="Avg Return Per Trade"
-            value={`${statistics.avg_return_pct_per_trade.toFixed(2)}%`}
-            color={statistics.avg_return_pct_per_trade >= 0 ? 'green' : 'red'}
+            value={`${statistics.avg_return_pct_per_trade?.toFixed(2) ?? 'N/A'}%`}
+            color={statistics.avg_return_pct_per_trade && statistics.avg_return_pct_per_trade >= 0 ? 'green' : 'red'}
           />
         </div>
       </div>
