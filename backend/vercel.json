@@ -11,10 +11,5 @@
       "src": "/(.*)",
       "dest": "api/index.py"
     }
-  ],
-  "env": {
-    "MONGODB_URL": "@mongodb_url",
-    "MONGODB_DB_NAME": "@mongodb_db_name",
-    "CORS_ORIGINS": "@cors_origins"
-  }
+  ]
 }
