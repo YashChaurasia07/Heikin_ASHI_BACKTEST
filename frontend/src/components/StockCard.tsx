@@ -1,5 +1,5 @@
 import { StockResult } from '../services/api';
-import { TrendingUp, TrendingDown, Activity, DollarSign } from 'lucide-react';
+import { TrendingUp, TrendingDown, Activity, DollarSign, Zap } from 'lucide-react';
 import { formatINR } from '../utils/formatters';
 
 interface StockCardProps {
@@ -11,6 +11,7 @@ interface StockCardProps {
 const StockCard = ({ symbol, result, onClick }: StockCardProps) => {
   const returnPct = ((result.final_capital - result.initial_capital) / result.initial_capital) * 100;
   const isProfit = result.pnl >= 0;
+  const hasLatestTScore = result.latest_tscore !== undefined && result.latest_tscore !== null;
 
   return (
     <div
@@ -27,6 +28,29 @@ const StockCard = ({ symbol, result, onClick }: StockCardProps) => {
       </div>
 
       <div className="space-y-3">
+        {/* Latest T-Score Display */}
+        {hasLatestTScore && (
+          <div className="bg-purple-900/30 border border-purple-700/50 rounded-lg p-3 mb-2">
+            <div className="flex justify-between items-center">
+              <span className="text-purple-300 text-xs font-semibold flex items-center gap-1">
+                <Zap size={14} className="text-purple-400" />
+                Latest T-Score
+              </span>
+              <span className="text-purple-400 text-lg font-bold">
+                {result.latest_tscore?.toFixed(1)}%
+              </span>
+            </div>
+            <div className="mt-1">
+              <div className="w-full bg-gray-700 rounded-full h-1.5">
+                <div 
+                  className="bg-gradient-to-r from-purple-600 to-purple-400 h-1.5 rounded-full transition-all duration-300"
+                  style={{ width: `${Math.min(result.latest_tscore || 0, 100)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-between items-center">
           <span className="text-gray-400 text-sm">P&L</span>
           <span className={`text-lg font-bold ${isProfit ? 'text-green-500' : 'text-red-500'}`}>

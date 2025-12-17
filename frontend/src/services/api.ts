@@ -7,9 +7,9 @@ const API_BASE_URL = import.meta.env.VITE_API_URL;
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: false,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  // headers: {
+  //   'Content-Type': 'application/json',
+  // },
 });
 
 export interface Trade {
@@ -20,6 +20,9 @@ export interface Trade {
   qty: number;
   pnl: number;
   exit_type: string;
+  t_score?: number;  // T-Score at entry (for HA+T-Score strategy)
+  return_pct?: number;
+  holding_days?: number;
 }
 
 export interface StockResult {
@@ -28,6 +31,7 @@ export interface StockResult {
   pnl: number;
   num_trades: number;
   trades: Trade[];
+  latest_tscore?: number;  // Latest T-Score at end of backtest period (for T-Score strategy)
 }
 
 export interface Statistics {
@@ -295,6 +299,15 @@ const api = {
       enable_compounding: true,
       rebalancing_frequency: 'daily'
     });
+    return response.data;
+  },
+
+  async getTScores(interval: string = 'daily', asOfDate?: string): Promise<any> {
+    let url = `/advanced/tscores?interval=${interval}`;
+    if (asOfDate) {
+      url += `&as_of_date=${asOfDate}`;
+    }
+    const response = await axiosInstance.get(url);
     return response.data;
   },
 };

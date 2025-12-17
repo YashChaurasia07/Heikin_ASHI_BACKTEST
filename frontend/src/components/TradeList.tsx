@@ -1,5 +1,5 @@
 import { Trade } from '../services/api';
-import { Calendar, TrendingUp, TrendingDown, Percent } from 'lucide-react';
+import { Calendar, TrendingUp, TrendingDown, Percent, Zap } from 'lucide-react';
 import { formatINR } from '../utils/formatters';
 
 interface TradeListProps {
@@ -22,7 +22,8 @@ const TradeList = ({ trades, symbol }: TradeListProps) => {
       <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
         {trades.map((trade, index) => {
           const isProfit = trade.pnl >= 0;
-          const returnPct = ((trade.exit_price - trade.entry_price) / trade.entry_price) * 100;
+          const returnPct = trade.return_pct ?? ((trade.exit_price - trade.entry_price) / trade.entry_price) * 100;
+          const hasTScore = trade.t_score !== undefined && trade.t_score !== null;
 
           return (
             <div
@@ -39,6 +40,29 @@ const TradeList = ({ trades, symbol }: TradeListProps) => {
                   {isProfit ? '+' : ''}{formatINR(trade.pnl, 2)}
                 </span>
               </div>
+
+              {/* T-Score Badge */}
+              {hasTScore && (
+                <div className="mb-3 bg-purple-900/30 border border-purple-700/50 rounded-lg p-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-purple-300 flex items-center gap-1">
+                      <Zap size={12} className="text-purple-400" />
+                      T-Score at Entry
+                    </span>
+                    <span className="text-purple-400 font-bold text-sm">
+                      {trade.t_score?.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="mt-1">
+                    <div className="w-full bg-gray-700 rounded-full h-1">
+                      <div 
+                        className="bg-gradient-to-r from-purple-600 to-purple-400 h-1 rounded-full"
+                        style={{ width: `${Math.min(trade.t_score || 0, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-3">

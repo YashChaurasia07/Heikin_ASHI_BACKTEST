@@ -69,3 +69,7 @@ frontend/.cache/
 # OS
 Thumbs.db
 .DS_Store
+data_daily
+data_weekly
+heikin_ashi_daily
+heikin_ashi_weekly

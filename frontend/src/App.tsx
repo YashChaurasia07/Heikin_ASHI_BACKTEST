@@ -11,6 +11,7 @@ import PortfolioSummary from './components/PortfolioSummary';
 import SymbolManager from './components/SymbolManager';
 import DataSyncStatus from './components/DataSyncStatus';
 import Instructions from './components/Instructions';
+import TScoreDashboard from './components/TScoreDashboard';
 import { BarChart3, TrendingUp, DollarSign, Activity, Search, Play, Loader2, PieChart, Sparkles, Calendar, ListChecks, Briefcase, Settings, BookOpen } from 'lucide-react';
 import { formatINR } from './utils/formatters';
 
@@ -25,7 +26,7 @@ function App() {
   const [initialCapital, setInitialCapital] = useState(50000);
   const [searchQuery, setSearchQuery] = useState('');
   const [showStatistics, setShowStatistics] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'stocks' | 'timeline' | 'positions' | 'settings' | 'instructions'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'stocks' | 'timeline' | 'positions' | 'tscore' | 'settings' | 'instructions'>('overview');
   
   // Strategy selection: 'all' | 'smart' | 'tscore'
   const [strategy, setStrategy] = useState<'all' | 'smart' | 'tscore'>('all');
@@ -510,10 +511,24 @@ function App() {
                         : 'text-gray-300 hover:text-white hover:bg-gray-700'
                     }`}
                   >
-                    <BarChart3 size={20} />
-                    Individual Stocks
+                    <PieChart size={20} />
+                    Stock Analysis
                     {activeTab === 'stocks' && (
                       <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-400"></div>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('tscore')}
+                    className={`flex items-center gap-2 px-6 py-4 font-semibold transition-all whitespace-nowrap relative ${
+                      activeTab === 'tscore'
+                        ? 'bg-purple-600 text-white'
+                        : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                    }`}
+                  >
+                    <Activity size={20} />
+                    T-Score Dashboard
+                    {activeTab === 'tscore' && (
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-purple-400"></div>
                     )}
                   </button>
                   <button
@@ -525,7 +540,7 @@ function App() {
                     }`}
                   >
                     <Settings size={20} />
-                    Settings
+                    Data Settings
                     {activeTab === 'settings' && (
                       <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-400"></div>
                     )}
@@ -539,7 +554,7 @@ function App() {
                     }`}
                   >
                     <BookOpen size={20} />
-                    Guide
+                    Instructions
                     {activeTab === 'instructions' && (
                       <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-400"></div>
                     )}
@@ -619,6 +634,10 @@ function App() {
                       </div>
                     )}
                   </div>
+                )}
+
+                {activeTab === 'tscore' && (
+                  <TScoreDashboard />
                 )}
 
                 {activeTab === 'settings' && (

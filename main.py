@@ -2564,8 +2564,8 @@ app.add_middleware(
 # Global constants
 DEFAULT_INITIAL_CAPITAL_PER_STOCK = 50000
 DEFAULT_START_DATE = '2022-06-01'
-DATA_FOLDER = 'data'
-HA_FOLDER = 'heikin_ashi'
+DATA_FOLDER = 'data_daily'
+HA_FOLDER = 'heikin_ashi_daily'
 
 # Cache for loaded dataframes
 _dataframe_cache = {}

@@ -284,21 +284,24 @@ export default function PortfolioTimeline({ trades }: PortfolioTimelineProps) {
                   <div className="mb-4">
                     <h4 className="text-sm font-semibold text-green-400 mb-2 flex items-center gap-2">
                       <TrendingUp size={16} />
-                      New Positions Entered
+                      New Positions Entered ({day.entries.length})
                     </h4>
-                    <div className="space-y-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {day.entries.map((trade, idx) => (
                         <div
                           key={idx}
-                          className="bg-gray-800 rounded-lg p-3 border border-gray-700"
+                          className="bg-gray-800 rounded-lg p-3 border border-gray-700 hover:border-green-500 transition-colors"
                         >
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <div className="text-sm font-medium text-white">
-                                Entry Price: ₹{trade.entry_price.toFixed(2)}
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="text-base font-bold text-green-400 mb-1">
+                                {trade.symbol}
+                              </div>
+                              <div className="text-sm text-gray-300">
+                                Entry: ₹{trade.entry_price.toFixed(2)}
                               </div>
                               <div className="text-xs text-gray-400">
-                                Qty: {Math.floor(trade.qty)} | Value: {formatINR(trade.entry_price * Math.floor(trade.qty), 2)}
+                                Qty: {Math.floor(trade.qty)} × ₹{trade.entry_price.toFixed(2)} = {formatINR(trade.entry_price * Math.floor(trade.qty), 2)}
                               </div>
                             </div>
                           </div>
@@ -313,25 +316,31 @@ export default function PortfolioTimeline({ trades }: PortfolioTimelineProps) {
                   <div>
                     <h4 className="text-sm font-semibold text-red-400 mb-2 flex items-center gap-2">
                       <TrendingDown size={16} />
-                      Positions Closed
+                      Positions Closed ({day.exits.length})
                     </h4>
-                    <div className="space-y-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {day.exits.map((trade, idx) => (
                         <div
                           key={idx}
-                          className="bg-gray-800 rounded-lg p-3 border border-gray-700"
+                          className="bg-gray-800 rounded-lg p-3 border border-gray-700 hover:border-red-500 transition-colors"
                         >
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <div className="text-sm font-medium text-white">
-                                Exit Price: ₹{trade.exit_price.toFixed(2)}
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="text-base font-bold text-red-400 mb-1">
+                                {trade.symbol}
+                              </div>
+                              <div className="text-sm text-gray-300">
+                                Exit: ₹{trade.exit_price.toFixed(2)}
                               </div>
                               <div className="text-xs text-gray-400">
-                                Entry: ₹{trade.entry_price.toFixed(2)} on {trade.entry_date} | Type: {trade.exit_type}
+                                Entry: ₹{trade.entry_price.toFixed(2)} on {trade.entry_date}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {trade.exit_type}
                               </div>
                             </div>
-                            <div className="text-right">
-                              <div className={`text-lg font-bold ${
+                            <div className="text-right ml-2">
+                              <div className={`text-base font-bold ${
                                 trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'
                               }`}>
                                 {trade.pnl >= 0 ? '+' : ''}{formatINR(trade.pnl, 2)}
