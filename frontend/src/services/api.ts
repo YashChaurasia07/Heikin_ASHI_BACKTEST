@@ -13,6 +13,7 @@ const axiosInstance = axios.create({
 });
 
 export interface Trade {
+  symbol: string;
   entry_date: string;
   entry_price: number;
   exit_date: string;
