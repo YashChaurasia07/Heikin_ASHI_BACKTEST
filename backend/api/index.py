@@ -42,11 +42,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS middleware
+# CORS middleware - Allow all origins for Vercel
+# In production, configure CORS_ORIGINS env variable with specific domains
+cors_origins = settings.cors_origins_list if settings.cors_origins_list else ["*"]
+logger.info(f"CORS origins configured: {cors_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=False,  # Set to False when using wildcard origins
     allow_methods=["*"],
     allow_headers=["*"],
 )

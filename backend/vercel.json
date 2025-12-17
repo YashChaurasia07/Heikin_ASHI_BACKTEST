@@ -1,1 +1,18 @@
-{}
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "api/index.py"
+    }
+  ],
+  "env": {
+    "CORS_ORIGINS": "https://heikin-ashi-backtest-apuj.vercel.app,http://localhost:5173"
+  }
+}
