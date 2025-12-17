@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from mangum import Mangum
+from contextlib import asynccontextmanager
 import logging
 import sys
 import os
@@ -19,11 +19,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage startup and shutdown"""
+    # Startup
+    logger.info("Starting Heikin Ashi Backtest Server...")
+    await connect_to_mongo()
+    logger.info("Server started successfully")
+    yield
+    # Shutdown
+    logger.info("Shutting down server...")
+    await close_mongo_connection()
+    logger.info("Server stopped")
+
+
 # Create FastAPI app
 app = FastAPI(
     title="Heikin Ashi Backtest Server",
     description="Professional backtesting API with MongoDB storage",
-    version="2.0.0"
+    version="2.0.0",
+    lifespan=lifespan
 )
 
 # CORS middleware
@@ -34,28 +50,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# MongoDB connection flag
-_db_connected = False
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize services on startup"""
-    global _db_connected
-    if not _db_connected:
-        logger.info("Starting Heikin Ashi Backtest Server...")
-        await connect_to_mongo()
-        _db_connected = True
-        logger.info("Server started successfully")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown"""
-    logger.info("Shutting down server...")
-    await close_mongo_connection()
-    logger.info("Server stopped")
 
 
 @app.get("/")
@@ -87,6 +81,3 @@ app.include_router(data.router)
 app.include_router(symbols.router)
 app.include_router(backtest.router)
 app.include_router(advanced_backtest.router)
-
-# Mangum handler for Vercel
-handler = Mangum(app)
