@@ -4,6 +4,7 @@ from datetime import datetime
 from models import DataSyncRequest, DataSyncStatus, IntervalType
 from services.data_fetcher import DataFetcher
 from services.heikin_ashi import HeikinAshiCalculator
+from services.cache_manager import cache
 from database import get_database
 import logging
 import asyncio
@@ -14,11 +15,26 @@ router = APIRouter(prefix="/data", tags=["data"])
 
 @router.get("/symbols")
 async def get_symbols():
-    """Get all available symbols"""
+    """Get all available symbols (optimized with caching)"""
     try:
+        # Check cache first
+        cached_symbols = cache.get('active_symbols')
+        if cached_symbols is not None:
+            return {"symbols": cached_symbols}
+        
         db = get_database()
-        symbols = await db.symbols.find({"active": True}).to_list(length=None)
-        return {"symbols": [s["symbol"] for s in symbols]}
+        # Use projection to only get symbol field, not entire documents
+        symbols = await db.symbols.find(
+            {"active": True},
+            {"_id": 0, "symbol": 1}
+        ).to_list(length=1000)  # Limit to prevent huge loads
+        
+        symbol_list = [s["symbol"] for s in symbols]
+        
+        # Cache for 5 minutes
+        cache.set('active_symbols', symbol_list, ttl_seconds=300)
+        
+        return {"symbols": symbol_list}
     except Exception as e:
         logger.error(f"Error fetching symbols: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -44,8 +60,11 @@ async def sync_data(request: DataSyncRequest):
         if request.symbols:
             symbols = request.symbols
         else:
-            # Sync all active symbols
-            symbol_docs = await db.symbols.find({"active": True}).to_list(length=None)
+            # Sync all active symbols (optimized query)
+            symbol_docs = await db.symbols.find(
+                {"active": True},
+                {"_id": 0, "symbol": 1}
+            ).to_list(length=1000)
             symbols = [s["symbol"] for s in symbol_docs]
         
         if not symbols:
@@ -171,6 +190,9 @@ async def sync_data(request: DataSyncRequest):
         
         logger.info(f"Data sync completed: Success: {success_count}, Skipped: {skipped_count}, Failed: {failed_count}, Total: {len(all_results)}")
         
+        # Invalidate cache after sync
+        cache.delete('active_symbols')
+        
         return all_results
         
     except Exception as e:
@@ -217,12 +239,16 @@ async def get_data_status(
 
 @router.get("/check-all")
 async def check_all_data_status(interval: IntervalType = Query(IntervalType.DAILY)):
-    """Check data status for all symbols"""
+    """Check data status for all symbols (optimized)"""
     try:
         db = get_database()
         fetcher = DataFetcher()
         
-        symbols = await db.symbols.find({"active": True}).to_list(length=None)
+        # Optimized query with projection
+        symbols = await db.symbols.find(
+            {"active": True},
+            {"_id": 0, "symbol": 1}
+        ).to_list(length=500)  # Limit for performance
         
         results = []
         for symbol_doc in symbols:
@@ -251,21 +277,27 @@ async def check_all_data_status(interval: IntervalType = Query(IntervalType.DAIL
 
 
 @router.get("/{symbol}")
-async def get_stock_ohlc_data(symbol: str, interval: IntervalType = Query(IntervalType.DAILY)):
-    """Get OHLC data for a specific symbol"""
+async def get_stock_ohlc_data(
+    symbol: str,
+    interval: IntervalType = Query(IntervalType.DAILY),
+    limit: int = Query(5000, le=10000)  # Max 10k records
+):
+    """Get OHLC data for a specific symbol with pagination"""
     try:
         db = get_database()
-        collection = db.daily_candles if interval == IntervalType.DAILY else db.weekly_candles
+        collection_name = f"stock_data_{interval.value}"
         
-        # Fetch data
-        candles = await collection.find(
+        # Fetch data with limit and projection
+        candles = await db[collection_name].find(
             {"symbol": symbol},
-            {"_id": 0}
-        ).sort("Date", 1).to_list(length=None)
+            {"_id": 0, "symbol": 0, "interval": 0}  # Exclude unnecessary fields
+        ).sort("date", -1).limit(limit).to_list(length=limit)
         
         if not candles:
             raise HTTPException(status_code=404, detail=f"No data found for {symbol}")
         
+        # Reverse to get chronological order
+        candles.reverse()
         return candles
         
     except HTTPException:
@@ -276,21 +308,27 @@ async def get_stock_ohlc_data(symbol: str, interval: IntervalType = Query(Interv
 
 
 @router.get("/{symbol}/ha")
-async def get_stock_ha_data(symbol: str, interval: IntervalType = Query(IntervalType.DAILY)):
-    """Get Heikin Ashi data for a specific symbol"""
+async def get_stock_ha_data(
+    symbol: str,
+    interval: IntervalType = Query(IntervalType.DAILY),
+    limit: int = Query(5000, le=10000)  # Max 10k records
+):
+    """Get Heikin Ashi data for a specific symbol with pagination"""
     try:
         db = get_database()
-        collection = db.daily_ha if interval == IntervalType.DAILY else db.weekly_ha
+        collection_name = f"heikin_ashi_{interval.value}"
         
-        # Fetch data
-        ha_candles = await collection.find(
+        # Fetch data with limit and projection
+        ha_candles = await db[collection_name].find(
             {"symbol": symbol},
-            {"_id": 0}
-        ).sort("Date", 1).to_list(length=None)
+            {"_id": 0, "symbol": 0, "interval": 0}  # Exclude unnecessary fields
+        ).sort("date", -1).limit(limit).to_list(length=limit)
         
         if not ha_candles:
             raise HTTPException(status_code=404, detail=f"No HA data found for {symbol}")
         
+        # Reverse to get chronological order
+        ha_candles.reverse()
         return ha_candles
         
     except HTTPException:

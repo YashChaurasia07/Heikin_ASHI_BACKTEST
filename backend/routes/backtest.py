@@ -36,9 +36,12 @@ async def run_backtest(params: BacktestParams) -> Dict[str, Any]:
         
         db = get_database()
         
-        # Get all active symbols
+        # Get all active symbols (optimized query)
         logger.info("Fetching active symbols from database...")
-        symbols_docs = await db.symbols.find({"active": True}).to_list(length=None)
+        symbols_docs = await db.symbols.find(
+            {"active": True},
+            {"_id": 0, "symbol": 1}
+        ).to_list(length=500)  # Limit to prevent huge loads
         symbols = [s["symbol"] for s in symbols_docs]
         
         if not symbols:
@@ -137,8 +140,8 @@ async def run_backtest(params: BacktestParams) -> Dict[str, Any]:
                 logger.error(f"Error processing {symbol}: {e}")
                 return None
         
-        # Process in batches to control memory usage
-        batch_size = 50
+        # Process in batches to control memory usage (reduced for better performance)
+        batch_size = 20  # Reduced from 50 for better performance
         processed_count = 0
         
         for i in range(0, len(symbols), batch_size):
@@ -272,8 +275,11 @@ async def get_backtest_status():
     try:
         db = get_database()
         
-        # Get all active symbols
-        symbols = await db.symbols.find({"active": True}).to_list(length=None)
+        # Get all active symbols (optimized)
+        symbols = await db.symbols.find(
+            {"active": True},
+            {"_id": 0, "symbol": 1}
+        ).to_list(length=500)
         
         daily_ready = 0
         weekly_ready = 0

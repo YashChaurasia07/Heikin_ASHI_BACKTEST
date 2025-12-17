@@ -13,10 +13,11 @@ router = APIRouter(prefix="/symbols", tags=["symbols"])
 
 @router.get("/", response_model=List[Symbol])
 async def get_all_symbols():
-    """Get all symbols"""
+    """Get all symbols (optimized with limit)"""
     try:
         db = get_database()
-        symbols = await db.symbols.find().to_list(length=None)
+        # Limit to prevent huge loads
+        symbols = await db.symbols.find().limit(1000).to_list(length=1000)
         return symbols
     except Exception as e:
         logger.error(f"Error fetching symbols: {e}")

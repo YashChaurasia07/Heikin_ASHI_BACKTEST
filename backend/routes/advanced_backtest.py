@@ -40,9 +40,12 @@ async def run_ha_tscore_backtest(params: SmartBacktestParams) -> Dict[str, Any]:
         
         db = get_database()
         
-        # Get all active symbols
+        # Get all active symbols (optimized)
         logger.info("Fetching active symbols from database...")
-        symbols_docs = await db.symbols.find({"active": True}).to_list(length=None)
+        symbols_docs = await db.symbols.find(
+            {"active": True},
+            {"_id": 0, "symbol": 1}
+        ).to_list(length=500)  # Limit for performance
         symbols = [s["symbol"] for s in symbols_docs]
         
         if not symbols:
@@ -97,6 +100,12 @@ async def run_ha_tscore_backtest(params: SmartBacktestParams) -> Dict[str, Any]:
         for normal_df, ha_df in stock_data_cache.values():
             all_dates.update(ha_df.index)
         all_dates = sorted(list(all_dates))
+        
+        if not all_dates:
+            raise HTTPException(
+                status_code=400,
+                detail="No trading dates found in the data. The selected date range may not have any data."
+            )
         
         logger.info(f"Backtest period: {len(all_dates)} days from {all_dates[0].date()} to {all_dates[-1].date()}")
         
@@ -393,6 +402,14 @@ async def run_ha_tscore_backtest(params: SmartBacktestParams) -> Dict[str, Any]:
             stock_initial_capital = actual_capital_deployed
             stock_final_capital = stock_initial_capital + data['pnl']
             
+            # Calculate latest T-Score (for current date/end of backtest period)
+            latest_tscore = None
+            if symbol in stock_data_cache:
+                normal_df, ha_df = stock_data_cache[symbol]
+                # Use the last date in the data (most recent)
+                latest_date = normal_df.index[-1]
+                latest_tscore = calculate_t_score(normal_df, latest_date)
+            
             stock_performance[symbol] = {
                 'pnl': data['pnl'],
                 'return_pct': (data['pnl'] / stock_initial_capital * 100) if stock_initial_capital > 0 else 0,
@@ -412,7 +429,8 @@ async def run_ha_tscore_backtest(params: SmartBacktestParams) -> Dict[str, Any]:
                 'win_rate': (len(win_trades) / len(data['trades']) * 100) if data['trades'] else 0,
                 'initial_capital': stock_initial_capital,
                 'final_capital': stock_final_capital,
-                'trades': data['trades']
+                'trades': data['trades'],
+                'latest_tscore': latest_tscore  # Latest T-Score at end of backtest period
             }
         
         # Calculate statistics using portfolio-level final_capital (not stock-level)
@@ -489,8 +507,11 @@ async def run_smart_portfolio_backtest(params: SmartBacktestParams) -> Dict[str,
         
         db = get_database()
         
-        # Get all active symbols
-        symbols_docs = await db.symbols.find({"active": True}).to_list(length=None)
+        # Get all active symbols (optimized)
+        symbols_docs = await db.symbols.find(
+            {"active": True},
+            {"_id": 0, "symbol": 1}
+        ).to_list(length=500)  # Limit for performance
         symbols = [s["symbol"] for s in symbols_docs]
         
         if not symbols:
@@ -555,6 +576,12 @@ async def run_smart_portfolio_backtest(params: SmartBacktestParams) -> Dict[str,
         for normal_df, ha_df in stock_data_cache.values():
             all_dates.update(ha_df.index)
         all_dates = sorted(list(all_dates))
+        
+        if not all_dates:
+            raise HTTPException(
+                status_code=400,
+                detail="No trading dates found in the data. The selected date range may not have any data."
+            )
         
         logger.info(f"Backtest period: {len(all_dates)} days from {all_dates[0].date()} to {all_dates[-1].date()}")
         
@@ -819,6 +846,14 @@ async def run_smart_portfolio_backtest(params: SmartBacktestParams) -> Dict[str,
             stock_initial_capital = total_capital  # Use actual deployed capital
             stock_final_capital = stock_initial_capital + data['pnl']
             
+            # Calculate latest T-Score (for current date/end of backtest period)
+            latest_tscore = None
+            if symbol in stock_data_cache:
+                normal_df, ha_df = stock_data_cache[symbol]
+                # Use the last date in the data (most recent)
+                latest_date = normal_df.index[-1]
+                latest_tscore = calculate_t_score(normal_df, latest_date)
+            
             stock_performance[symbol] = {
                 'pnl': data['pnl'],
                 'return_pct': (data['pnl'] / stock_initial_capital * 100) if stock_initial_capital > 0 else 0,
@@ -838,7 +873,8 @@ async def run_smart_portfolio_backtest(params: SmartBacktestParams) -> Dict[str,
                 'win_rate': (len(win_trades) / len(data['trades']) * 100) if data['trades'] else 0,
                 'initial_capital': stock_initial_capital,
                 'final_capital': stock_final_capital,
-                'trades': data['trades']
+                'trades': data['trades'],
+                'latest_tscore': latest_tscore  # Latest T-Score at end of backtest period
             }
         
         # Calculate statistics using portfolio-level final_capital (not stock-level)
@@ -934,3 +970,139 @@ async def run_smart_portfolio_backtest_get(
         interval=IntervalType(interval)
     )
     return await run_smart_portfolio_backtest(params)
+
+
+@router.get("/tscores")
+async def get_all_tscores(
+    interval: str = Query("daily", description="Data interval: daily or weekly"),
+    as_of_date: Optional[str] = Query(None, description="Calculate T-Score as of this date (default: latest)")
+) -> Dict[str, Any]:
+    """
+    Get T-Scores for all active stocks
+    
+    Returns:
+    - List of all stocks with their T-Scores
+    - Latest data date for each stock
+    - Sortable and filterable data
+    """
+    try:
+        logger.info(f"Fetching T-Scores for all stocks (interval: {interval})")
+        
+        db = get_database()
+        interval_type = IntervalType(interval)
+        
+        # Get all active symbols
+        symbols_docs = await db.symbols.find(
+            {"active": True},
+            {"_id": 0, "symbol": 1}
+        ).to_list(length=500)
+        symbols = [s["symbol"] for s in symbols_docs]
+        
+        if not symbols:
+            raise HTTPException(status_code=400, detail="No active symbols found")
+        
+        logger.info(f"Calculating T-Scores for {len(symbols)} symbols...")
+        
+        # Calculate T-Scores for all stocks
+        tscores_data = []
+        
+        for idx, symbol in enumerate(symbols, 1):
+            try:
+                # Load stock data (only normal data needed for T-Score)
+                collection_name = f"stock_data_{interval_type.value}"
+                
+                # Get stock data
+                query = {"symbol": symbol}
+                if as_of_date:
+                    query["date"] = {"$lte": pd.to_datetime(as_of_date)}
+                
+                stock_data = await db[collection_name].find(
+                    query,
+                    {"_id": 0, "symbol": 0, "interval": 0}
+                ).sort("date", 1).to_list(length=5000)
+                
+                if not stock_data or len(stock_data) < 21:
+                    continue
+                
+                # Convert to DataFrame
+                df = pd.DataFrame(stock_data)
+                df['date'] = pd.to_datetime(df['date'])
+                df = df.set_index('date').sort_index()
+                
+                # Get latest date
+                latest_date = df.index[-1]
+                
+                # Calculate T-Score for latest date
+                tscore = calculate_t_score(df, latest_date)
+                
+                if tscore is not None:
+                    latest_close = df.loc[latest_date, 'close']
+                    latest_volume = df.loc[latest_date, 'volume'] if 'volume' in df.columns else 0
+                    
+                    # Calculate additional metrics
+                    sma_21 = df['close'].rolling(21).mean().iloc[-1] if len(df) >= 21 else None
+                    sma_50 = df['close'].rolling(50).mean().iloc[-1] if len(df) >= 50 else None
+                    sma_200 = df['close'].rolling(200).mean().iloc[-1] if len(df) >= 200 else None
+                    
+                    # Handle NaN values
+                    if sma_21 is not None and pd.isna(sma_21):
+                        sma_21 = None
+                    if sma_50 is not None and pd.isna(sma_50):
+                        sma_50 = None
+                    if sma_200 is not None and pd.isna(sma_200):
+                        sma_200 = None
+                    
+                    # Calculate 52-week high
+                    lookback_days = min(252, len(df))
+                    week_52_high = df['high'].iloc[-lookback_days:].max()
+                    distance_from_52w_high = ((week_52_high - latest_close) / week_52_high) * 100
+                    
+                    tscores_data.append({
+                        'symbol': symbol,
+                        't_score': tscore,
+                        'latest_date': latest_date.strftime('%Y-%m-%d'),
+                        'latest_close': float(latest_close),
+                        'latest_volume': int(latest_volume),
+                        'sma_21': float(sma_21) if sma_21 is not None else None,
+                        'sma_50': float(sma_50) if sma_50 is not None else None,
+                        'sma_200': float(sma_200) if sma_200 is not None else None,
+                        'week_52_high': float(week_52_high),
+                        'distance_from_52w_high_pct': round(float(distance_from_52w_high), 2),
+                        'above_sma_21': bool(latest_close > sma_21) if sma_21 is not None else None,
+                        'above_sma_50': bool(latest_close > sma_50) if sma_50 is not None else None,
+                        'above_sma_200': bool(latest_close > sma_200) if sma_200 is not None else None
+                    })
+                
+                if idx % 50 == 0:
+                    logger.info(f"Processed {idx}/{len(symbols)} symbols...")
+                    
+            except Exception as e:
+                logger.error(f"Error calculating T-Score for {symbol}: {e}")
+                continue
+        
+        # Sort by T-Score (highest first)
+        tscores_data.sort(key=lambda x: x['t_score'], reverse=True)
+        
+        logger.info(f"Successfully calculated T-Scores for {len(tscores_data)} stocks")
+        
+        return {
+            "total_stocks": len(tscores_data),
+            "interval": interval,
+            "as_of_date": as_of_date or "latest",
+            "tscores": tscores_data,
+            "summary": {
+                "avg_tscore": round(sum(d['t_score'] for d in tscores_data) / len(tscores_data), 2) if tscores_data else 0,
+                "max_tscore": max(d['t_score'] for d in tscores_data) if tscores_data else 0,
+                "min_tscore": min(d['t_score'] for d in tscores_data) if tscores_data else 0,
+                "stocks_above_80": sum(1 for d in tscores_data if d['t_score'] >= 80),
+                "stocks_above_60": sum(1 for d in tscores_data if d['t_score'] >= 60),
+                "stocks_below_40": sum(1 for d in tscores_data if d['t_score'] < 40)
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting T-Scores: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+

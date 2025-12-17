@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 import logging
 from config import settings
 from database import connect_to_mongo, close_mongo_connection
@@ -18,6 +19,9 @@ app = FastAPI(
     description="Professional backtesting API with MongoDB storage",
     version="2.0.0"
 )
+
+# Add GZip compression middleware (BEFORE CORS for better performance)
+app.add_middleware(GZipMiddleware, minimum_size=1000)  # Compress responses > 1KB
 
 # CORS middleware
 app.add_middleware(

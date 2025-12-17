@@ -57,13 +57,23 @@ class BacktestEngine:
                 "date": {"$gte": extended_start, "$lte": end_dt}
             }
             
+            # Projection to exclude unnecessary fields
+            projection = {"_id": 0, "interval": 0, "symbol": 0}
+            
             # Fetch both datasets (MongoDB can handle parallel queries)
-            normal_data_task = db[collection_name].find(extended_query).sort("date", 1).to_list(length=None)
+            normal_data_task = db[collection_name].find(
+                extended_query,
+                projection
+            ).sort("date", 1).to_list(length=5000)  # Limit to prevent huge loads
+            
             ha_query = {
                 "symbol": symbol,
                 "date": {"$gte": start_dt, "$lte": end_dt}
             }
-            ha_data_task = db[ha_collection_name].find(ha_query).sort("date", 1).to_list(length=None)
+            ha_data_task = db[ha_collection_name].find(
+                ha_query,
+                projection
+            ).sort("date", 1).to_list(length=5000)  # Limit to prevent huge loads
             
             # Await both
             normal_data, ha_data = await asyncio.gather(normal_data_task, ha_data_task)

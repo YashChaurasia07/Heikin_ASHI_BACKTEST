@@ -34,13 +34,14 @@ class HeikinAshiCalculator:
         try:
             db = get_database()
             
-            # Fetch stock data from DB
+            # Fetch stock data from DB (optimized with projection and limit)
             collection_name = f"stock_data_{interval.value}"
             cursor = db[collection_name].find(
-                {"symbol": symbol}
-            ).sort("date", 1)
+                {"symbol": symbol},
+                {"_id": 0}  # Exclude _id field
+            ).sort("date", 1).limit(10000)  # Limit to prevent huge loads
             
-            stock_data = await cursor.to_list(length=None)
+            stock_data = await cursor.to_list(length=10000)
             
             if not stock_data:
                 return False, f"No stock data found for {symbol}"

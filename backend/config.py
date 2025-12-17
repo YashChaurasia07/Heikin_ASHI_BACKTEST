@@ -14,7 +14,8 @@ class Settings(BaseSettings):
     RELOAD: bool = True
     
     # CORS - Allow frontend domain in production
-    CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "*")
+    # CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "*")
+    CORS_ORIGINS: str = '*'
     
     # TradingView
     TV_USERNAME: str = ""
@@ -24,6 +25,13 @@ class Settings(BaseSettings):
     DEFAULT_START_DATE: str = "2022-01-01"
     DEFAULT_INITIAL_CAPITAL: float = 50000
     DATA_UPDATE_HOURS: int = 24  # Hours before data is considered stale
+    
+    # Performance Settings
+    MAX_QUERY_LIMIT: int = 10000  # Max records to return in a single query
+    CACHE_TTL_SECONDS: int = 300  # Default cache TTL (5 minutes)
+    BATCH_SIZE: int = 20  # Batch size for concurrent operations
+    MONGODB_MAX_POOL_SIZE: int = 100
+    MONGODB_MIN_POOL_SIZE: int = 10
     
     class Config:
         env_file = ".env"
